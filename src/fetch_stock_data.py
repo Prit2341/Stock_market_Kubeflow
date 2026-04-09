@@ -20,8 +20,8 @@ stocks = [
 ]
 
 # Step 2: create folders
-os.makedirs("../data/raw", exist_ok=True)
-os.makedirs("../data/combined", exist_ok=True)
+os.makedirs("./data/raw", exist_ok=True)
+os.makedirs("./data/combined", exist_ok=True)
 
 # Step 3: date range
 end_date = datetime.today()
@@ -47,7 +47,7 @@ for stock in stocks:
     data.reset_index(inplace=True)
 
     # save individual csv
-    data.to_csv(f"../data/raw/{stock}_10years.csv", index=False)
+    data.to_csv(f"./data/raw/{stock}_10years.csv", index=False)
 
     # rename columns with stock prefix
     data.columns = [
@@ -72,7 +72,7 @@ for df in dfs[1:]:
 combined_df = combined_df.sort_values("Date")
 
 # Step 7: save combined csv
-combined_df.to_csv("../data/combined/all_10_stocks_10years.csv", index=False)
+combined_df.to_csv("./data/combined/all_10_stocks_10years.csv", index=False)
 
 print("\nCombined CSV saved successfully")
 print(combined_df.head())
