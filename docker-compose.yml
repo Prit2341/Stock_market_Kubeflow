@@ -1,0 +1,186 @@
+version: "3.8"
+
+# Shared volume for pipeline outputs (data + models)
+# Pipeline components (Kubeflow jobs) write here; services read from here.
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  stock_net:
+    driver: bridge
+
+services:
+
+  # ── FastAPI prediction service ──────────────────────────────────────────────
+  fastapi:
+    build:
+      context: ./services/fastapi
+      dockerfile: Dockerfile
+    container_name: stock_fastapi
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+      MODELS_DIR: /data/models
+    networks:
+      - stock_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  # ── Streamlit dashboard ─────────────────────────────────────────────────────
+  streamlit:
+    build:
+      context: ./services/streamlit
+      dockerfile: Dockerfile
+    container_name: stock_streamlit
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/data
+    environment:
+      FASTAPI_URL: http://fastapi:8000
+      DATA_DIR: /data
+    networks:
+      - stock_net
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: stock_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./services/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    networks:
+      - stock_net
+    restart: unless-stopped
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: stock_grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./services/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./services/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3001
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/stock_pipeline.json
+    networks:
+      - stock_net
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ── Pipeline components (run as one-shot jobs, not long-running) ────────────
+  # Run manually or via Kubeflow. Shown here for local testing convenience.
+  #
+  # docker compose run --rm fetch_data
+  # docker compose run --rm feature_engineering
+  # docker compose run --rm train_xgboost   (run all 3 training jobs)
+  # docker compose run --rm model_evaluation
+
+  fetch_data:
+    build:
+      context: ./components/1_fetch_data
+      dockerfile: Dockerfile
+    container_name: stock_fetch_data
+    volumes:
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+    networks:
+      - stock_net
+    profiles: ["pipeline"]      # only starts with: docker compose --profile pipeline up
+
+  feature_engineering:
+    build:
+      context: ./components/2_feature_engineering
+      dockerfile: Dockerfile
+    container_name: stock_feature_engineering
+    volumes:
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+    networks:
+      - stock_net
+    profiles: ["pipeline"]
+
+  train_xgboost:
+    build:
+      context: ./components/3_train_xgboost
+      dockerfile: Dockerfile
+    container_name: stock_train_xgboost
+    volumes:
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+      MODELS_DIR: /data/models
+    networks:
+      - stock_net
+    profiles: ["pipeline"]
+
+  train_gradient_boosting:
+    build:
+      context: ./components/3_train_gradient_boosting
+      dockerfile: Dockerfile
+    container_name: stock_train_gb
+    volumes:
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+      MODELS_DIR: /data/models
+    networks:
+      - stock_net
+    profiles: ["pipeline"]
+
+  train_random_forest:
+    build:
+      context: ./components/3_train_random_forest
+      dockerfile: Dockerfile
+    container_name: stock_train_rf
+    volumes:
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+      MODELS_DIR: /data/models
+    networks:
+      - stock_net
+    profiles: ["pipeline"]
+
+  model_evaluation:
+    build:
+      context: ./components/4_model_evaluation
+      dockerfile: Dockerfile
+    container_name: stock_model_evaluation
+    volumes:
+      - ./data:/data
+    environment:
+      DATA_DIR: /data
+      MODELS_DIR: /data/models
+    networks:
+      - stock_net
+    profiles: ["pipeline"]

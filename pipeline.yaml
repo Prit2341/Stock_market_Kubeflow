@@ -1,0 +1,151 @@
+# PIPELINE DEFINITION
+# Name: stock-prediction-pipeline
+# Description: End-to-end stock market ML pipeline: fetch > features > train x3 > evaluate
+components:
+  comp-feature-engineering:
+    executorLabel: exec-feature-engineering
+  comp-fetch-data:
+    executorLabel: exec-fetch-data
+  comp-model-evaluation:
+    executorLabel: exec-model-evaluation
+  comp-train-gradient-boosting:
+    executorLabel: exec-train-gradient-boosting
+  comp-train-random-forest:
+    executorLabel: exec-train-random-forest
+  comp-train-xgboost:
+    executorLabel: exec-train-xgboost
+deploymentSpec:
+  executors:
+    exec-feature-engineering:
+      container:
+        command:
+        - python
+        - src/feature_engineering.py
+        image: stock-feature-engineering:latest
+    exec-fetch-data:
+      container:
+        command:
+        - python
+        - src/fetch_stock_data.py
+        image: stock-fetch-data:latest
+    exec-model-evaluation:
+      container:
+        command:
+        - python
+        - src/model_evaluation.py
+        image: stock-model-evaluation:latest
+    exec-train-gradient-boosting:
+      container:
+        command:
+        - python
+        - src/train_gradient_boosting.py
+        image: stock-train-gradient-boosting:latest
+    exec-train-random-forest:
+      container:
+        command:
+        - python
+        - src/train_random_forest.py
+        image: stock-train-random-forest:latest
+    exec-train-xgboost:
+      container:
+        command:
+        - python
+        - src/train_xgboost.py
+        image: stock-train-xgboost:latest
+pipelineInfo:
+  description: 'End-to-end stock market ML pipeline: fetch > features > train x3 >
+    evaluate'
+  name: stock-prediction-pipeline
+root:
+  dag:
+    tasks:
+      feature-engineering:
+        cachingOptions: {}
+        componentRef:
+          name: comp-feature-engineering
+        dependentTasks:
+        - fetch-data
+        taskInfo:
+          name: feature-engineering
+      fetch-data:
+        cachingOptions: {}
+        componentRef:
+          name: comp-fetch-data
+        taskInfo:
+          name: fetch-data
+      model-evaluation:
+        cachingOptions: {}
+        componentRef:
+          name: comp-model-evaluation
+        dependentTasks:
+        - train-gradient-boosting
+        - train-random-forest
+        - train-xgboost
+        taskInfo:
+          name: model-evaluation
+      train-gradient-boosting:
+        cachingOptions: {}
+        componentRef:
+          name: comp-train-gradient-boosting
+        dependentTasks:
+        - feature-engineering
+        taskInfo:
+          name: train-gradient-boosting
+      train-random-forest:
+        cachingOptions: {}
+        componentRef:
+          name: comp-train-random-forest
+        dependentTasks:
+        - feature-engineering
+        taskInfo:
+          name: train-random-forest
+      train-xgboost:
+        cachingOptions: {}
+        componentRef:
+          name: comp-train-xgboost
+        dependentTasks:
+        - feature-engineering
+        taskInfo:
+          name: train-xgboost
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.13.0
+---
+platforms:
+  kubernetes:
+    deploymentSpec:
+      executors:
+        exec-feature-engineering:
+          imagePullPolicy: IfNotPresent
+          pvcMount:
+          - constant: stock-data
+            mountPath: /data
+        exec-fetch-data:
+          imagePullPolicy: IfNotPresent
+          pvcMount:
+          - constant: stock-data
+            mountPath: /data
+          secretAsEnv:
+          - keyToEnv:
+            - envVar: ALPHA_VANTAGE_API_KEY
+              secretKey: api-key
+            secretName: alpha-vantage
+        exec-model-evaluation:
+          imagePullPolicy: IfNotPresent
+          pvcMount:
+          - constant: stock-data
+            mountPath: /data
+        exec-train-gradient-boosting:
+          imagePullPolicy: IfNotPresent
+          pvcMount:
+          - constant: stock-data
+            mountPath: /data
+        exec-train-random-forest:
+          imagePullPolicy: IfNotPresent
+          pvcMount:
+          - constant: stock-data
+            mountPath: /data
+        exec-train-xgboost:
+          imagePullPolicy: IfNotPresent
+          pvcMount:
+          - constant: stock-data
+            mountPath: /data

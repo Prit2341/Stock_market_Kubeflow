@@ -1,0 +1,10 @@
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: clean-mysql-data
+        image: busybox
+        command: ["sh", "-c", "rm -rf /var/lib/mysql/*"]
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
